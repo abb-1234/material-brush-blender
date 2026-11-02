@@ -12,13 +12,14 @@ A Blender add-on that lets you **paint with materials** — pick any material fr
 
 - **材质当笔刷**：从材质库选一个材质，刷到物体上，遮罩自动生成，白色刷上、黑色擦除。
 - **图层系统**：每层可独立调节 **透明度**、**显示开关**、**图案大小**（放大/缩小纹理，支持程序化材质如 Voronoi、噪波）。
+- **中英文界面**：面板顶部「语言」可切 `中文 / English / 自动跟随 Blender`。
 - **底材质完全保留**：插件不改动你原材质的节点，只在输出前插入混合链；随时可清空图层还原。
 - **一键导出（引擎可用）**：自动烘焙基色 / 粗糙度 / 法线，导出 **glTF(.glb)** 或 **FBX**（贴图内嵌），并附 `manifest.json` 机器可读清单。引擎侧**不需要写任何 shader**。
 - **高级：导出遮罩 + 图层清单**：如果需要在引擎里实时切换图层，可导出每层遮罩 PNG 与图层 JSON，配合自己的 shader 使用。
 
 ### 安装
 
-1. 下载 `dist/material-brush-v1.3.3.zip`
+1. 下载 `dist/material-brush-v1.4.0.zip`
 2. Blender → `编辑 → 偏好设置 → 插件 → 从磁盘安装`
 3. 选择该 zip，勾选 **Material Brush (材质笔刷)**
 4. 3D 视图按 `N`，在侧栏找到「材质笔刷」标签
@@ -63,13 +64,14 @@ A Blender add-on that lets you **paint with materials** — pick any material fr
 
 - **Paint with materials** — pick any material as a brush and paint it onto a mesh; a mask is generated automatically (white paints, black erases).
 - **Layer stack** — per-layer **opacity**, **visibility** and **pattern scale** (works for procedural materials such as Voronoi / Noise).
+- **Bilingual UI** — switch `中文 / English / Auto` from the Language dropdown at the top of the panel.
 - **Non-destructive** — your original material nodes are never modified; the add-on only inserts a mix chain before the material output.
 - **One-click engine export** — bakes base color / roughness / normal and exports **glTF (.glb)** or **FBX** with embedded textures, plus a machine-readable `manifest.json`. **No shader authoring required** on the engine side.
 - **Advanced: mask + layer manifest export** — for real-time layer blending inside an engine.
 
 ### Install
 
-1. Download `dist/material-brush-v1.3.3.zip`
+1. Download `dist/material-brush-v1.4.0.zip`
 2. Blender → `Edit → Preferences → Add-ons → Install from Disk`
 3. Pick the zip and enable **Material Brush**
 4. In the 3D Viewport press `N`, find the **材质笔刷** tab

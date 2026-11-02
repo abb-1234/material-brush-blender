@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Material Brush (材质笔刷)",
     "author": "WorkBuddy",
-    "version": (1, 3, 3),
+    "version": (1, 4, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > 材质笔刷",
     "description": "选材质当笔刷刷到物体表面；可按图层导出遮罩，或烘焙成 PBR 贴图 + GLB 给 Godot/Unity。",
@@ -26,6 +26,103 @@ TEXTURE_NODES = {
     "ShaderNodeTexChecker", "ShaderNodeTexBrick", "ShaderNodeTexSky",
     "ShaderNodeTexMusgrave",
 }
+
+
+# ---------------------------------------------------------------- i18n
+
+STRINGS = {
+    "zh": {
+        "lang": "语言",
+        "add": "刷这个材质",
+        "use_cur": "取当前材质",
+        "layers": "图层（上层在上）",
+        "hint_none": "先点上面那个按钮建一层",
+        "hint_empty": "还没有图层",
+        "paint": "绘制这一层",
+        "size": "图案大小",
+        "status_tex": "贴图 ",
+        "status_proc": "程序化材质",
+        "status_flat": "纯色（无底色贴图）",
+        "status_trans": "该材质有透射，刷上去不明显",
+        "export": "导出到游戏引擎",
+        "tips1": "选中物体=只导这些；没选=整个场景",
+        "tips2": "材质自动烘焙成标准 PBR，引擎侧不用写代码",
+        "tips3": "透射材质（玻璃）烘出来是黑的",
+        "export_all": "一键导出（引擎可用）",
+        "masks": "导出遮罩 + 图层清单",
+        "open_after": "导出后自动打开文件夹",
+        "dir_empty": "留空 = blend 文件旁的 MB_Export",
+        "dir_to": "输出到 ",
+        "adv": "高级：需要引擎里实时调图层时用",
+        "err_brush": "先在上方选一个笔刷材质",
+        "err_uv": "物体没有 UV，先展 UV",
+        "err_fail": "建层失败（已还原材质）：",
+        "err_nolayer": "没有图层可导出",
+        "err_notbrush": "当前材质不是笔刷材质",
+        "err_nonmesh": "场景里没有网格物体",
+        "ok_masks": "已导出 %d 张遮罩到 %s",
+        "ok_objs": "已导出 %d 个物体到 %s",
+        "err_export": "导出失败：",
+        "pick_layer": "先选一个图层",
+        "no_mask_node": "找不到遮罩节点，点『重建』",
+        "warn_baked": "这是笔刷材质，请选原始材质",
+    },
+    "en": {
+        "lang": "Language",
+        "add": "Paint with this material",
+        "use_cur": "Use current material",
+        "layers": "Layers (top first)",
+        "hint_none": "Click the button above to add a layer",
+        "hint_empty": "No layers yet",
+        "paint": "Paint this layer",
+        "size": "Pattern size",
+        "status_tex": "Texture ",
+        "status_proc": "Procedural material",
+        "status_flat": "Flat color (no base texture)",
+        "status_trans": "Transmissive material - hard to see when painted",
+        "export": "Export to game engine",
+        "tips1": "Selected objects only; nothing selected = whole scene",
+        "tips2": "Bakes to standard PBR - no shader coding needed",
+        "tips3": "Transmissive materials (glass) bake to black",
+        "export_all": "Export (engine ready)",
+        "masks": "Export masks + layer list",
+        "open_after": "Open folder after export",
+        "dir_empty": "Empty = MB_Export next to the .blend",
+        "dir_to": "Output to ",
+        "adv": "Advanced: real-time layers inside the engine",
+        "err_brush": "Pick a brush material first",
+        "err_uv": "Object has no UVs - unwrap it first",
+        "err_fail": "Layer creation failed (material restored): ",
+        "err_nolayer": "No layers to export",
+        "err_notbrush": "Current material is not a Material Brush material",
+        "err_nonmesh": "No mesh objects in the scene",
+        "ok_masks": "Exported %d masks to %s",
+        "ok_objs": "Exported %d objects to %s",
+        "err_export": "Export failed: ",
+        "pick_layer": "Select a layer first",
+        "no_mask_node": "Mask node missing - click Rebuild",
+        "warn_baked": "This is a brush material - pick the original one",
+    },
+}
+
+
+def cur_lang():
+    try:
+        v = bpy.context.scene.mb_state.lang
+    except Exception:
+        v = "AUTO"
+    if v == "ZH":
+        return "zh"
+    if v == "EN":
+        return "en"
+    loc = getattr(bpy.app.translations, "locale", "en") or "en"
+    return "zh" if loc.lower().startswith("zh") else "en"
+
+
+def t(key):
+    table = STRINGS.get(cur_lang(), STRINGS["en"])
+    return table.get(key, STRINGS["en"].get(key, key))
+
 
 
 # ---------------------------------------------------------------- basics
@@ -456,6 +553,13 @@ class MB_State(bpy.types.PropertyGroup):
         default="1024",
     )
     export_dir: bpy.props.StringProperty(name="导出目录", subtype="DIR_PATH", default="")
+    lang: bpy.props.EnumProperty(
+        name="语言 / Language",
+        items=[("AUTO", "Auto", "Follow Blender UI language"),
+               ("ZH", "中文", ""),
+               ("EN", "English", "")],
+        default="AUTO",
+    )
     auto_open_dir: bpy.props.BoolProperty(name="导出后打开文件夹", default=True)
     export_format: bpy.props.EnumProperty(
         name="格式",
@@ -486,10 +590,10 @@ class MB_OT_add_layer(bpy.types.Operator):
         ob = context.active_object
         brush = st.brush_mat
         if not brush:
-            self.report({"ERROR"}, "先在上方选一个笔刷材质")
+            self.report({"ERROR"}, t("err_brush"))
             return {"CANCELLED"}
         if not ensure_uv(context):
-            self.report({"ERROR"}, "物体没有 UV，先展 UV")
+            self.report({"ERROR"}, t("err_uv"))
             return {"CANCELLED"}
 
         orig_mat = ob.active_material
@@ -534,7 +638,7 @@ class MB_OT_add_layer(bpy.types.Operator):
                     ob.material_slots[ob.active_material_index].material = orig_mat
             except Exception:
                 pass
-            self.report({"ERROR"}, "建层失败（已还原材质）：%s" % e)
+            self.report({"ERROR"}, t("err_fail") + str(e))
             return {"CANCELLED"}
 
 
@@ -619,10 +723,10 @@ class MB_OT_paint(bpy.types.Operator):
         mat = context.active_object.active_material
         lst = layers_of(mat)
         if lst is None or not (0 <= lst.active_index < len(lst.layers)):
-            self.report({"ERROR"}, "先选一个图层")
+            self.report({"ERROR"}, t("pick_layer"))
             return {"CANCELLED"}
         if not enter_paint(context, mat, lst.layers[lst.active_index]):
-            self.report({"ERROR"}, "找不到遮罩节点，点『重建』")
+            self.report({"ERROR"}, t("no_mask_node"))
             return {"CANCELLED"}
         return {"FINISHED"}
 
@@ -637,7 +741,7 @@ class MB_OT_clear(bpy.types.Operator):
         mat = context.active_object.active_material
         lst = layers_of(mat)
         if lst is None:
-            self.report({"ERROR"}, "当前材质不是笔刷材质")
+            self.report({"ERROR"}, t("err_notbrush"))
             return {"CANCELLED"}
         for _ in range(len(lst.layers)):
             img = bpy.data.images.get(lst.layers[0].image_name)
@@ -683,7 +787,7 @@ class MB_OT_rebuild(bpy.types.Operator):
 
     def execute(self, context):
         if not rebuild(context):
-            self.report({"ERROR"}, "当前材质不是笔刷材质")
+            self.report({"ERROR"}, t("err_notbrush"))
             return {"CANCELLED"}
         return {"FINISHED"}
 
@@ -700,7 +804,7 @@ class MB_OT_use_active(bpy.types.Operator):
             return {"CANCELLED"}
         mat = ob.active_material
         if mat.get(MB_TAG):
-            self.report({"WARNING"}, "这是笔刷材质，请选原始材质")
+            self.report({"WARNING"}, t("warn_baked"))
             return {"CANCELLED"}
         context.scene.mb_state.brush_mat = mat
         return {"FINISHED"}
@@ -946,7 +1050,7 @@ class MB_OT_export_all(bpy.types.Operator):
             objs = [o for o in scn.objects if o.type == "MESH"]
             scope = "scene"
         if not objs:
-            self.report({"ERROR"}, "场景里没有网格物体")
+            self.report({"ERROR"}, t("err_nonmesh"))
             return {"CANCELLED"}
 
         root = os.path.join(export_dir(context), _safe_name(scn.name) + "_export")
@@ -1079,12 +1183,12 @@ class MB_OT_export_all(bpy.types.Operator):
                     bpy.ops.wm.path_open(filepath=root)
                 except Exception:
                     pass
-            self.report({"INFO"}, "已导出 %d 个物体到 %s" % (len(objs), root))
+            self.report({"INFO"}, t("ok_objs") % (len(objs), root))
             return {"FINISHED"}
 
         except Exception as e:
             traceback.print_exc()
-            self.report({"ERROR"}, "导出失败：%s" % e)
+            self.report({"ERROR"}, t("err_export") + str(e))
             return {"CANCELLED"}
         finally:
             for ob, idx, mat in restore:
@@ -1127,7 +1231,7 @@ class MB_OT_export_masks(bpy.types.Operator):
         mat = context.active_object.active_material
         lst = layers_of(mat)
         if lst is None or not len(lst.layers):
-            self.report({"ERROR"}, "没有图层可导出")
+            self.report({"ERROR"}, t("err_nolayer"))
             return {"CANCELLED"}
         d = export_dir(context)
         files = []
@@ -1160,7 +1264,7 @@ class MB_OT_export_masks(bpy.types.Operator):
         }
         with open(os.path.join(d, "material_brush_layers.json"), "w", encoding="utf-8") as f:
             json.dump(manifest, f, ensure_ascii=False, indent=2)
-        self.report({"INFO"}, "已导出 %d 张遮罩到 %s" % (len(files), d))
+        self.report({"INFO"}, t("ok_masks") % (len(files), d))
         return {"FINISHED"}
 
 
@@ -1179,7 +1283,7 @@ class MB_OT_bake_export(bpy.types.Operator):
         ob = context.active_object
         mat = ob.active_material
         if layers_of(mat) is None:
-            self.report({"ERROR"}, "当前材质不是笔刷材质")
+            self.report({"ERROR"}, t("err_notbrush"))
             return {"CANCELLED"}
         st = context.scene.mb_state
         size = int(st.bake_size)
@@ -1214,7 +1318,7 @@ class MB_OT_bake_export(bpy.types.Operator):
             return {"FINISHED"}
         except Exception as e:
             traceback.print_exc()
-            self.report({"ERROR"}, "导出失败：%s" % e)
+            self.report({"ERROR"}, t("err_export") + str(e))
             return {"CANCELLED"}
         finally:
             for o in context.selected_objects:
@@ -1258,10 +1362,11 @@ class MB_PT_panel(bpy.types.Panel):
 
         row = col.row(align=True)
         row.prop(st, "resolution", text="")
+        row.prop(st, "lang", text="")
 
         row = col.row()
         row.scale_y = 1.6
-        row.operator("mb.add_layer", icon="BRUSH_DATA", text="刷这个材质")
+        row.operator("mb.add_layer", icon="BRUSH_DATA", text=t("add"))
 
         bm = st.brush_mat
         if bm:
@@ -1275,28 +1380,28 @@ class MB_PT_panel(bpy.types.Panel):
                 bc = bp.inputs.get("Base Color")
                 bimg = _upstream_image(bc) if (bc and bc.is_linked) else None
                 if bimg:
-                    col.label(text="贴图 " + bimg.name, icon="IMAGE_DATA")
+                    col.label(text=t("status_tex") + bimg.name, icon="IMAGE_DATA")
                 elif bc and bc.is_linked:
-                    col.label(text="程序化材质", icon="NODETREE")
+                    col.label(text=t("status_proc"), icon="NODETREE")
                 else:
-                    col.label(text="纯色（无底色贴图）", icon="INFO")
+                    col.label(text=t("status_flat"), icon="INFO")
                 tr = [i for i in bp.inputs if "Transmission" in i.name]
                 if tr and float(tr[0].default_value) > 0.05:
-                    col.label(text="该材质有透射，刷上去不明显", icon="ERROR")
+                    col.label(text=t("status_trans"), icon="ERROR")
 
         layout.separator()
         box = layout.box()
         head = box.row()
-        head.label(text="图层（上层在上）")
+        head.label(text=t("layers"))
         head.operator("mb.toggle_mask", text="", icon="IMAGE_ALPHA", depress=st.show_mask)
         head.operator("mb.clear_layers", text="", icon="TRASH")
         head.operator("mb.rebuild", text="", icon="FILE_REFRESH")
 
         if lst is None:
-            box.label(text="先点上面那个按钮建一层", icon="INFO")
+            box.label(text=t("hint_none"), icon="INFO")
             return
         if not len(lst.layers):
-            box.label(text="还没有图层", icon="INFO")
+            box.label(text=t("hint_empty"), icon="INFO")
             return
 
         for i, layer in enumerate(lst.layers):
@@ -1318,10 +1423,10 @@ class MB_PT_panel(bpy.types.Panel):
 
             if is_active:
                 rs = box.row(align=True)
-                rs.prop(layer, "size", text="图案大小", slider=True)
+                rs.prop(layer, "size", text=t("size"), slider=True)
                 rr = box.row()
                 rr.scale_y = 1.4
-                rr.operator("mb.paint", icon="PLAY", text="绘制这一层")
+                rr.operator("mb.paint", icon="PLAY", text=t("paint"))
 
 
 
@@ -1344,9 +1449,9 @@ class MB_PT_export(bpy.types.Panel):
 
         tips = layout.column(align=True)
         tips.scale_y = 0.85
-        tips.label(text="选中物体=只导这些；没选=整个场景")
-        tips.label(text="材质自动烘焙成标准 PBR，引擎侧不用写代码")
-        tips.label(text="透射材质（玻璃）烘出来是黑的")
+        tips.label(text=t("tips1"))
+        tips.label(text=t("tips2"))
+        tips.label(text=t("tips3"))
 
         layout.separator(factor=0.5)
         row = layout.row(align=True)
@@ -1355,21 +1460,21 @@ class MB_PT_export(bpy.types.Panel):
 
         big = layout.row()
         big.scale_y = 1.6
-        big.operator("mb.export_all", text="一键导出（引擎可用）", icon="PACKAGE")
-        layout.prop(st, "auto_open_dir", text="导出后自动打开文件夹")
+        big.operator("mb.export_all", text=t("export_all"), icon="PACKAGE")
+        layout.prop(st, "auto_open_dir", text=t("open_after"))
 
         layout.separator(factor=0.5)
-        layout.label(text="高级：需要引擎里实时调图层时用")
-        layout.operator("mb.export_masks", text="导出遮罩 + 图层清单", icon="IMAGE_DATA")
+        layout.label(text=t("adv"))
+        layout.operator("mb.export_masks", text=t("masks"), icon="IMAGE_DATA")
 
         layout.separator(factor=0.5)
         row = layout.row(align=True)
         row.prop(st, "export_dir", text="")
         row.operator("mb.open_export_dir", text="", icon="FILE_FOLDER")
         if st.export_dir:
-            layout.label(text="输出到 " + bpy.path.abspath(st.export_dir), icon="FILE_FOLDER")
+            layout.label(text=t("dir_to") + bpy.path.abspath(st.export_dir), icon="FILE_FOLDER")
         else:
-            layout.label(text="留空 = blend 文件旁的 MB_Export", icon="INFO")
+            layout.label(text=t("dir_empty"), icon="INFO")
 
 
 # ---------------------------------------------------------------- register
