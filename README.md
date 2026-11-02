@@ -19,7 +19,7 @@ A Blender add-on that lets you **paint with materials** — pick any material fr
 
 ### 安装
 
-1. 下载 `dist/material-brush-v1.4.0.zip`
+1. 下载 `dist/material-brush-v1.4.1.zip`
 2. Blender → `编辑 → 偏好设置 → 插件 → 从磁盘安装`
 3. 选择该 zip，勾选 **Material Brush (材质笔刷)**
 4. 3D 视图按 `N`，在侧栏找到「材质笔刷」标签
@@ -48,7 +48,7 @@ A Blender add-on that lets you **paint with materials** — pick any material fr
 ### 已知限制
 
 - 金属度固定为 0（混合着色器无法直接采样金属度）
-- **透射材质（玻璃）烘焙后为黑** —— 这是烘焙的本质，玻璃请在引擎里用透明材质
+- **透射材质（玻璃）会自动排除在烘焙之外**，遮罩单独输出到 `transparent/`，在引擎里配一个透明材质即可（glTF 原生支持 `KHR_materials_transmission`，单独的玻璃物体可直接导出）
 - 法线细节不随图层带过来（只取 Principled 上游 6 层、最多 48 个节点）
 - 烘焙需要**不重叠的 UV**
 
@@ -71,7 +71,7 @@ A Blender add-on that lets you **paint with materials** — pick any material fr
 
 ### Install
 
-1. Download `dist/material-brush-v1.4.0.zip`
+1. Download `dist/material-brush-v1.4.1.zip`
 2. Blender → `Edit → Preferences → Add-ons → Install from Disk`
 3. Pick the zip and enable **Material Brush**
 4. In the 3D Viewport press `N`, find the **材质笔刷** tab
@@ -100,7 +100,7 @@ Requires Blender **4.2+** (developed and tested on 5.2).
 ### Limitations
 
 - Metallic is forced to 0 (cannot be sampled through a mix shader)
-- **Transmissive materials (glass) bake to black** — use a transparent material in the engine instead
+- **Transmissive layers (glass) are skipped during baking**; their masks are written to `transparent/` — assign a transparent material in the engine. glTF supports `KHR_materials_transmission`, so a standalone glass object can be exported directly.
 - Normal detail is not carried per layer (Principled + up to 6 levels / 48 nodes)
 - Baking requires **non-overlapping UVs**
 

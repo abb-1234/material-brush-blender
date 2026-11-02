@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Material Brush (材质笔刷)",
     "author": "WorkBuddy",
-    "version": (1, 4, 0),
+    "version": (1, 4, 1),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > 材质笔刷",
     "description": "选材质当笔刷刷到物体表面；可按图层导出遮罩，或烘焙成 PBR 贴图 + GLB 给 Godot/Unity。",
@@ -885,6 +885,20 @@ def _walk_image(sock, depth=6):
     return None
 
 
+def _is_transmissive(brush):
+    """判断笔刷材质是否是透射型（玻璃）。"""
+    p = _principled(brush)
+    if not p:
+        return False
+    for i in p.inputs:
+        if "Transmission" in i.name:
+            try:
+                return (not i.is_linked) and float(i.default_value) > 0.05
+            except Exception:
+                return False
+    return False
+
+
 def _brush_images(brush):
     """从笔刷材质里取 基色 / 粗糙度 / 法线 对应的图像。"""
     out = {}
@@ -1083,6 +1097,18 @@ class MB_OT_export_all(bpy.types.Operator):
                 }
                 if mat and layers_of(mat) and ob.data.uv_layers:
                     stem = _safe_name(ob.name)
+
+                    # 透射层（玻璃）不参与烘焙，否则会烘成黑块污染基色
+                    holder = layers_of(mat)
+                    trans_layers = []
+                    hidden_ones = []
+                    for L in holder.layers:
+                        bm_ = bpy.data.materials.get(L.mat_name)
+                        if bm_ and _is_transmissive(bm_):
+                            trans_layers.append(L)
+                            if L.visible:
+                                L.visible = False
+                                hidden_ones.append(L)
                     bc = os.path.join(tex_dir, stem + "_basecolor.png")
                     rg = os.path.join(tex_dir, stem + "_roughness.png")
                     nm = os.path.join(tex_dir, stem + "_normal.png")
@@ -1111,6 +1137,24 @@ class MB_OT_export_all(bpy.types.Operator):
                         "roughness": os.path.relpath(rg, root),
                         "normal": os.path.relpath(nm, root),
                     }
+
+                    # 恢复透射层可见性，并把它们的遮罩单独导出
+                    for L in hidden_ones:
+                        L.visible = True
+
+                    if trans_layers:
+                        tdir = os.path.join(root, "transparent")
+                        os.makedirs(tdir, exist_ok=True)
+                        tfiles = []
+                        for k, L in enumerate(trans_layers):
+                            im = bpy.data.images.get(L.image_name)
+                            fn = "%s_trans_%02d_%s.png" % (stem, k, _safe_name(L.name))
+                            if im and _copy_image(im, os.path.join(tdir, fn)):
+                                tfiles.append(fn)
+                        entry["transparent_layers"] = [
+                            {"name": L.name, "material": L.mat_name, "mask": tfiles[k] if k < len(tfiles) else None}
+                            for k, L in enumerate(trans_layers)
+                        ]
                 baked_entries.append(entry)
 
             # 2) 全选后一次性导出，保持相对位置
@@ -1153,7 +1197,8 @@ class MB_OT_export_all(bpy.types.Operator):
                 "notes": [
                     "A 方案产物：模型 + 标准 PBR 贴图，直接拖进引擎即可，无需写 shader",
                     "Godot 用 .glb（原生支持）；Unity / UE 可用 .fbx（贴图已内嵌）",
-                    "金属度固定 0；玻璃等透射材质烘焙后为黑",
+                    "金属度固定 0；玻璃等透射层已被排除在烘焙外",
+                    "透明层（玻璃）不参与烘焙，遮罩见 transparent/，引擎里配透明材质使用",
                     "如需在引擎里实时调平铺/换材质，用『导出遮罩』走 shader 路线",
                 ],
             }
