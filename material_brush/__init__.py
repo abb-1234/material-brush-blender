@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Material Brush (材质笔刷)",
     "author": "WorkBuddy",
-    "version": (1, 4, 2),
+    "version": (1, 6, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > 材质笔刷",
     "description": "选材质当笔刷刷到物体表面；可按图层导出遮罩，或烘焙成 PBR 贴图 + GLB 给 Godot/Unity。",
@@ -40,6 +40,7 @@ STRINGS = {
         "hint_empty": "还没有图层",
         "paint": "绘制这一层",
         "size": "图案大小",
+        "no_bake": "排除烘焙（金属/玻璃）",
         "status_tex": "贴图 ",
         "status_proc": "程序化材质",
         "status_flat": "纯色（无底色贴图）",
@@ -76,6 +77,7 @@ STRINGS = {
         "hint_empty": "No layers yet",
         "paint": "Paint this layer",
         "size": "Pattern size",
+        "no_bake": "Exclude from bake (metal/glass)",
         "status_tex": "Texture ",
         "status_proc": "Procedural material",
         "status_flat": "Flat color (no base texture)",
@@ -531,6 +533,7 @@ class MB_Layer(bpy.types.PropertyGroup):
     opacity: bpy.props.FloatProperty(name="透明度", default=1.0, min=0.0, max=1.0,
                                      subtype="FACTOR", update=_layer_param_update)
     visible: bpy.props.BoolProperty(name="显示", default=True, update=_layer_param_update)
+    no_bake: bpy.props.BoolProperty(name="排除烘焙", default=False, update=_layer_param_update)
     size: bpy.props.FloatProperty(name="图案大小", default=1.0, min=0.05, max=50.0,
                                   soft_min=0.1, soft_max=10.0, update=_layer_param_update)
 
@@ -885,27 +888,45 @@ def _walk_image(sock, depth=6):
     return None
 
 
-def _is_transmissive(brush):
-    """判断笔刷材质是否是透射型（玻璃）。
-    规则：透射值为常量且 > 0.05，或透射被节点驱动（读不到值，保守当作玻璃），
-    或材质里直接用了 Glass BSDF。"""
+def _image_avg(img, samples=800):
+    """粗略取图像平均亮度，用来判断金属度贴图是不是"全金属"。"""
+    try:
+        px = img.pixels[:]
+        n = len(px)
+        if n < 8:
+            return None
+        step = max(4, (n // samples) // 4 * 4)
+        vals = px[0:n:step]
+        return sum(vals) / len(vals) if vals else None
+    except Exception:
+        return None
+
+
+def _nonbake_reason(brush):
+    """只自动判定玻璃（透射）——这一条物理上确定。
+    金属等其它情况交给每层的『排除烘焙』开关，避免启发式误判。"""
     if not brush or not brush.use_nodes or not brush.node_tree:
-        return False
+        return None
     for n in brush.node_tree.nodes:
         if n.bl_idname == "ShaderNodeBsdfGlass":
-            return True
+            return "transmission"
     p = _principled(brush)
     if not p:
-        return False
+        return None
     for i in p.inputs:
         if "Transmission" in i.name:
             if i.is_linked:
-                return True          # 被节点驱动，读到的是 0，不能当不透明
+                return "transmission"
             try:
-                return float(i.default_value) > 0.05
+                if float(i.default_value) > 0.05:
+                    return "transmission"
             except Exception:
-                return False
-    return False
+                pass
+    return None
+
+
+def _is_transmissive(brush):
+    return _nonbake_reason(brush) == "transmission"
 
 
 def _brush_images(brush):
@@ -1113,7 +1134,7 @@ class MB_OT_export_all(bpy.types.Operator):
                     hidden_ones = []
                     for L in holder.layers:
                         bm_ = bpy.data.materials.get(L.mat_name)
-                        if bm_ and _is_transmissive(bm_):
+                        if bm_ and (_nonbake_reason(bm_) or L.no_bake):
                             trans_layers.append(L)
                             if L.visible:
                                 L.visible = False
@@ -1152,16 +1173,19 @@ class MB_OT_export_all(bpy.types.Operator):
                         L.visible = True
 
                     if trans_layers:
-                        tdir = os.path.join(root, "transparent")
+                        tdir = os.path.join(root, "nonbake")
                         os.makedirs(tdir, exist_ok=True)
                         tfiles = []
                         for k, L in enumerate(trans_layers):
                             im = bpy.data.images.get(L.image_name)
-                            fn = "%s_trans_%02d_%s.png" % (stem, k, _safe_name(L.name))
+                            fn = "%s_nb_%02d_%s.png" % (stem, k, _safe_name(L.name))
                             if im and _copy_image(im, os.path.join(tdir, fn)):
                                 tfiles.append(fn)
-                        entry["transparent_layers"] = [
-                            {"name": L.name, "material": L.mat_name, "mask": tfiles[k] if k < len(tfiles) else None}
+                        entry["non_bakeable_layers"] = [
+                            {"name": L.name,
+                             "material": L.mat_name,
+                             "reason": _nonbake_reason(bpy.data.materials.get(L.mat_name)) or ("manual" if L.no_bake else "unknown"),
+                             "mask": tfiles[k] if k < len(tfiles) else None}
                             for k, L in enumerate(trans_layers)
                         ]
                 baked_entries.append(entry)
@@ -1206,8 +1230,8 @@ class MB_OT_export_all(bpy.types.Operator):
                 "notes": [
                     "A 方案产物：模型 + 标准 PBR 贴图，直接拖进引擎即可，无需写 shader",
                     "Godot 用 .glb（原生支持）；Unity / UE 可用 .fbx（贴图已内嵌）",
-                    "金属度固定 0；玻璃等透射层已被排除在烘焙外",
-                    "透明层（玻璃）不参与烘焙，遮罩见 transparent/，引擎里配透明材质使用",
+                    "金属度固定 0；玻璃（透射）与强金属层已排除在烘焙外",
+                    "玻璃与金属层不参与烘焙，遮罩见 nonbake/（reason 字段标明原因），引擎里配对应材质",
                     "如需在引擎里实时调平铺/换材质，用『导出遮罩』走 shader 路线",
                 ],
             }
@@ -1478,6 +1502,8 @@ class MB_PT_panel(bpy.types.Panel):
             if is_active:
                 rs = box.row(align=True)
                 rs.prop(layer, "size", text=t("size"), slider=True)
+                rb = box.row()
+                rb.prop(layer, "no_bake", text=t("no_bake"))
                 rr = box.row()
                 rr.scale_y = 1.4
                 rr.operator("mb.paint", icon="PLAY", text=t("paint"))
