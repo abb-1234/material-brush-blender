@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Material Brush (材质笔刷)",
     "author": "WorkBuddy",
-    "version": (1, 4, 1),
+    "version": (1, 4, 2),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > 材质笔刷",
     "description": "选材质当笔刷刷到物体表面；可按图层导出遮罩，或烘焙成 PBR 贴图 + GLB 给 Godot/Unity。",
@@ -886,14 +886,23 @@ def _walk_image(sock, depth=6):
 
 
 def _is_transmissive(brush):
-    """判断笔刷材质是否是透射型（玻璃）。"""
+    """判断笔刷材质是否是透射型（玻璃）。
+    规则：透射值为常量且 > 0.05，或透射被节点驱动（读不到值，保守当作玻璃），
+    或材质里直接用了 Glass BSDF。"""
+    if not brush or not brush.use_nodes or not brush.node_tree:
+        return False
+    for n in brush.node_tree.nodes:
+        if n.bl_idname == "ShaderNodeBsdfGlass":
+            return True
     p = _principled(brush)
     if not p:
         return False
     for i in p.inputs:
         if "Transmission" in i.name:
+            if i.is_linked:
+                return True          # 被节点驱动，读到的是 0，不能当不透明
             try:
-                return (not i.is_linked) and float(i.default_value) > 0.05
+                return float(i.default_value) > 0.05
             except Exception:
                 return False
     return False

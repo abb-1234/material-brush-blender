@@ -19,7 +19,7 @@ A Blender add-on that lets you **paint with materials** — pick any material fr
 
 ### 安装
 
-1. 下载 `dist/material-brush-v1.4.1.zip`
+1. 下载 `dist/material-brush-v1.4.2.zip`
 2. Blender → `编辑 → 偏好设置 → 插件 → 从磁盘安装`
 3. 选择该 zip，勾选 **Material Brush (材质笔刷)**
 4. 3D 视图按 `N`，在侧栏找到「材质笔刷」标签
@@ -71,7 +71,7 @@ A Blender add-on that lets you **paint with materials** — pick any material fr
 
 ### Install
 
-1. Download `dist/material-brush-v1.4.1.zip`
+1. Download `dist/material-brush-v1.4.2.zip`
 2. Blender → `Edit → Preferences → Add-ons → Install from Disk`
 3. Pick the zip and enable **Material Brush**
 4. In the 3D Viewport press `N`, find the **材质笔刷** tab
