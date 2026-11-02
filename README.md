@@ -48,7 +48,7 @@ A Blender add-on that lets you **paint with materials** — pick any material fr
 ### 已知限制
 
 - 金属度固定为 0（混合着色器无法直接采样金属度）
-- **玻璃自动排除、金属可手动排除**：玻璃层检测到透射即跳过烘焙；金属等其它层可勾选「排除烘焙」。遮罩统一输出到 `nonbake/`，遮罩单独输出到 `transparent/`，在引擎里配一个透明材质即可（glTF 原生支持 `KHR_materials_transmission`，单独的玻璃物体可直接导出）
+- **玻璃自动排除、金属可手动排除**：玻璃层检测到透射即跳过烘焙；金属等其它层可勾选「排除烘焙」。被排除层的遮罩统一输出到 `nonbake/`，在引擎里配对应材质即可（glTF 原生支持 `KHR_materials_transmission`，单独的玻璃物体可直接导出）
 - 法线细节不随图层带过来（只取 Principled 上游 6 层、最多 48 个节点）
 - 烘焙需要**不重叠的 UV**
 
@@ -100,7 +100,7 @@ Requires Blender **4.2+** (developed and tested on 5.2).
 ### Limitations
 
 - Metallic is forced to 0 (cannot be sampled through a mix shader)
-- **Glass is skipped automatically, metal can be excluded with one checkbox** — their masks land in `nonbake/`
+- **Glass is skipped automatically; metal can be excluded per layer** — excluded layers are not baked and their masks land in `nonbake/`, so you assign the matching material in the engine. glTF supports `KHR_materials_transmission`, so a standalone glass object can be exported directly.
 - Normal detail is not carried per layer (Principled + up to 6 levels / 48 nodes)
 - Baking requires **non-overlapping UVs**
 
